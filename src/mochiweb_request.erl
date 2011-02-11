@@ -405,11 +405,13 @@ should_close() ->
 %%      a Keep-Alive request.
 cleanup() ->
     [erase(K) || K <- [?SAVE_QS,
+                       ?SAVE_QS_UTF8,
                        ?SAVE_PATH,
                        ?SAVE_RECV,
                        ?SAVE_BODY,
                        ?SAVE_BODY_LENGTH,
                        ?SAVE_POST,
+                       ?SAVE_POST_UTF8,
                        ?SAVE_COOKIE,
                        ?SAVE_FORCE_CLOSE]],
     ok.
