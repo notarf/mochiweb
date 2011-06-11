@@ -1,3 +1,11 @@
+** FORK NOTES **
+
+Added websockets support, see the websockets_demo in examples/
+
+****************
+
+
+
 MochiWeb is an Erlang library for building lightweight HTTP servers.
 
 The latest version of MochiWeb is available at http://github.com/mochi/mochiweb
