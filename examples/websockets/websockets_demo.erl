@@ -43,20 +43,26 @@ wsloop_active(WSReq) ->
 
 wsloop_active0(WSReq) ->
     receive
-        closed ->
-            io:format("client api got closed~n",[]),
-            ok;
-        {error, Reason} ->
-            io:format("client api got error ~p~n", [Reason]),
-            ok;
+        %% Received msg from the websocket:
         {websockets_frame, Frame} ->
             Msg = ["Dear client, thanks for sending us this msg: ", Frame],
             WSReq:send(Msg),
-            wsloop_active0(WSReq)
+            wsloop_active0(WSReq);
+        %% Not strictly necessary, since we get {'EXIT',_,_} regardless:
+        {error, Reason} ->
+            io:format("client api got error ~p~n", [Reason]),
+            ok;
+        %% Important to catch these and terminate, or we'll end up with an
+        %% orphan process that will crash next time it tries to :send
+        {'EXIT', _, Reason} ->
+            io:format("WS LOOP exiting, reason ~p", [Reason]),
+            ok
     after 29000 ->
-            %% Some aggressive proxies may disconnect if no traffic for 30 secs
-            WSReq:send("IDLE msg to stop proxies from disconnecting us"),
-            wsloop_active0(WSReq)
+        %% Some aggressive proxies may disconnect if no traffic for 30 secs
+        WSReq:send("IDLE msg to stop proxies from disconnecting us"),
+        %% NB: perhaps do a fully-qualified call here if you want to do
+        %% hot code upgrades on this process in production:
+        wsloop_active0(WSReq)
     end.
 
 loop(Req, DocRoot) ->

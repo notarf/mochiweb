@@ -190,12 +190,15 @@ headers_ws_upgrade(Socket, Request, Body, H) ->
     OriginValidator = Body#body.websocket_origin_validator,
     %% websocket_init will exit() if anything looks fishy
     websocket_init(Socket, Path, H, OriginValidator),
-    {ok, WSPid} = mochiweb_websocket_delegate:start_link(self()),
     Peername = mochiweb_socket:peername(Socket),
     Type = mochiweb_socket:type(Socket),
+    %% we want to catch "normal" exits from the WS process:
+    erlang:process_flag(trap_exit, true),
+    {ok, WSPid} = mochiweb_websocket_delegate:start_link(self(), Socket),
     WSReq = mochiweb_wsrequest:new(WSPid, Path, H, Peername, Type),
-    mochiweb_websocket_delegate:go(WSPid, Socket),
-    call_body(Body#body.websocket_loop, WSReq).
+    call_body(Body#body.websocket_loop, WSReq),
+    mochiweb_socket:close(Socket),
+    exit(normal).
 
 call_body({M, F}, Req) ->
     M:F(Req);

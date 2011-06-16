@@ -10,9 +10,8 @@
 %% an older version of the websocket spec, where messages are framed 0x00...0xFF
 %% so the newer protocol with length headers has not been tested with a browser.
 %%
-%% Guarantees that 'closed' will be sent to the client pid once the socket dies,
 %% Messages are:
-%%  closed, {error, Reason}, {websockets_frame, Data}
+%%  {error, Reason}, {websockets_frame, Data}
 
 -module(mochiweb_websocket_delegate).
 -behaviour(gen_server).
@@ -29,16 +28,21 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--export([start_link/1, go/2, send/2, close/1]).
+-export([start_link/2, send/2, close/1]).
+
+-define(L(F,A), io:format(F++"\n", A)).
 
 %%
 
-start_link(Destination) ->
-    gen_server:start_link(?MODULE, [Destination], []).
-
-go(Pid, Socket) ->
-    ok = mochiweb_socket:controlling_process(Socket, Pid),
-    gen_server:cast(Pid, {go, Socket}).
+start_link(Destination, Socket) ->
+    case gen_server:start_link(?MODULE, [Destination, Socket], []) of
+        {ok, Pid} ->
+            ok = mochiweb_socket:controlling_process(Socket, Pid),
+            ok = gen_server:cast(Pid, take_socket),
+            {ok, Pid};
+        E ->
+            E
+    end.
 
 send(Pid, Msg) ->
     gen_server:call(Pid, {send, Msg}).
@@ -49,13 +53,15 @@ close(Pid) ->
 %%
 
 
-init([Dest]) ->
+init([Dest, Socket]) ->
+    %?L("delegate pid ~p", [self()]),
     process_flag(trap_exit, true),
     {ok, #state{legacy  = true,
                 dest    = Dest, 
                 ft      = undefined,
                 buffer  = <<>>,
-                partial = <<>>
+                partial = <<>>,
+                socket  = Socket
                }}.
 
 handle_call(close, _From, State) ->
@@ -71,31 +77,30 @@ handle_call({send, Msg}, _From, State = #state{legacy=true, socket=Socket}) ->
     R = mochiweb_socket:send(Socket, [0, Msg, 255]),
     {reply, R, State}.
 
-handle_cast({go, Socket}, State) ->
-    mochiweb_socket:setopts(Socket, [{active, true}]),    
-    {noreply, State#state{socket=Socket}}.
+%% sent once after controlling_process is passed to us:
+handle_cast(take_socket, State) ->
+    mochiweb_socket:setopts(State#state.socket, [{active, once}]),    
+    {noreply, State}.
 
-handle_info({'EXIT', _, _}, State) ->
-    State#state.dest ! closed,
+handle_info({'EXIT', _, _Reason}, State) ->
+    %?L("got exit in wsdel ~p",[_Reason]),
     {stop, normal, State};
+
 handle_info({Closed, _Sock}, State) when Closed =:= tcp_closed; 
                                          Closed =:= ssl_closed ->
-    State#state.dest ! closed,
     {stop, normal, State};
 handle_info({Error, _Sock, Reason}, State) when Error =:= tcp_error;
                                                 Error =:= ssl_error ->
     State#state.dest ! {error, Reason},
-    State#state.dest ! closed,
     {stop, normal, State};
-handle_info({SockType, S, Data}, State = #state{socket=S, buffer=Buffer}) when SockType =:= tcp; 
-                                                                               SockType =:= ssl ->
-    NewState = process_data(State#state{buffer= <<Buffer/binary,Data/binary>>}),
-    {noreply, NewState};
-handle_info({ssl, _Sock, Data}, State = #state{buffer=Buffer}) ->
+handle_info({SockType, _Sock, Data}, State = #state{buffer=Buffer}) when SockType =:= tcp; 
+                                                                         SockType =:= ssl ->
+    mochiweb_socket:setopts(State#state.socket, [{active, once}]),    
     NewState = process_data(State#state{buffer= <<Buffer/binary,Data/binary>>}),
     {noreply, NewState}.
 
 terminate(_Reason, _State) ->
+    %?L("terminate in wsdel, reason ~p", [_Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
