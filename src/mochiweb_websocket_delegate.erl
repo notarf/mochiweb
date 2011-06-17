@@ -70,12 +70,18 @@ handle_call(close, _From, State) ->
 handle_call({send, Msg}, _From, State = #state{legacy=false, socket=Socket}) ->
     %% header is 0xFF then 64bit big-endian int of the msg length
     Len = iolist_size(Msg),
-    R = mochiweb_socket:send(Socket, [255, <<Len:64/unsigned-integer>>, Msg]), 
-    {reply, R, State};
+    case mochiweb_socket:send(Socket, [255, <<Len:64/unsigned-integer>>, Msg]) of
+        ok              -> {reply, ok, State};
+        {error, closed} -> {stop, normal, {error,closed}, State};
+        Err             -> {stop, Err, Err, State}
+    end;
 handle_call({send, Msg}, _From, State = #state{legacy=true, socket=Socket}) ->
     %% legacy spec, msgs are framed with 0x00..0xFF
-    R = mochiweb_socket:send(Socket, [0, Msg, 255]),
-    {reply, R, State}.
+    case mochiweb_socket:send(Socket, [0, Msg, 255]) of
+        ok              -> {reply, ok, State};
+        {error, closed} -> {stop, normal, {error,closed}, State};
+        Err             -> {stop, Err, Err, State}
+    end.
 
 %% sent once after controlling_process is passed to us:
 handle_cast(take_socket, State) ->
