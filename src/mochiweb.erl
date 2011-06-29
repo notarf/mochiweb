@@ -54,11 +54,23 @@ new_request({Socket, {Method, {abs_path, Uri}, Version}, Headers}) ->
                          Uri,
                          Version,
                          mochiweb_headers:make(Headers));
-% this case probably doesn't "exist".
+%% this case probably doesn't "exist".
 new_request({Socket, {Method, {absoluteURI, _Protocol, _Host, _Port, Uri},
                       Version}, Headers}) ->
     mochiweb_request:new(Socket,
                          Method,
+                         Uri,
+                         Version,
+                         mochiweb_headers:make(Headers));
+
+%% Exposing mochiweb to the internet directly will result in random scans 
+%% trying to use the HTTP method "CONNECT" assuming/hoping this is a proxy
+new_request({Socket, {"CONNECT", {scheme, Host, Port}, Version}, Headers}) ->
+    %% Since mochiweb_request needs a URI, we poke the host/port in here.
+    %% Note that CONNECT method doesn't really contain a URI though.
+    Uri = lists:flatten(io_lib:format("/?host=~s&port=~s", [Host, Port])),
+    mochiweb_request:new(Socket,
+                         'CONNECT',
                          Uri,
                          Version,
                          mochiweb_headers:make(Headers));

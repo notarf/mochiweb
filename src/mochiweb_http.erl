@@ -158,8 +158,17 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
                     headers_ws_upgrade(Socket, Request, Body, MHeaders);
                 false ->
                     Req = new_request(Socket, Request, Headers),
-                    call_body(Body#body.http_loop, Req),
-                    ?MODULE:after_response(Body, Req)
+                    case Req:get(method) of
+                        'CONNECT' ->
+                            %% reject CONNECT attempts gracefully
+                            %% (tends to happen often with a public IP)
+                            Req:respond({405, [], "CONNECT not supported"}),
+                            mochiweb_socket:close(Socket),
+                            exit(normal);
+                        _Meth ->
+                            call_body(Body#body.http_loop, Req),
+                            ?MODULE:after_response(Body, Req)
+                    end
             end;
         {Protocol, _, {http_header, _, Name, _, Value}} when Protocol == http orelse Protocol == ssl ->
             headers(Socket, Request, [{Name, Value} | Headers], Body,
