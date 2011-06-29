@@ -9,6 +9,7 @@
 
 -include("internal.hrl").
 
+-export([dump_state/1, dump_acceptors/1]).
 -export([start/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3,
          handle_info/2]).
@@ -37,6 +38,11 @@ start(State=#mochiweb_socket_server{}) ->
     start_server(State);
 start(Options) ->
     start(parse_options(Options)).
+
+dump_acceptors(Pid) ->
+    gen_server:call(Pid, dump_acceptors).
+dump_state(Pid) ->
+    gen_server:call(Pid, dump_state).
 
 get(Name, Property) ->
     gen_server:call(Name, {get, Property}).
@@ -237,6 +243,10 @@ upgrade_state({mochiweb_socket_server, Port, Loop, Name,
 
 handle_call(Req, From, State) when ?is_old_state(State) ->
     handle_call(Req, From, upgrade_state(State));
+handle_call(dump_acceptors,_From, State) ->
+    {reply, State#mochiweb_socket_server.acceptor_pool, State};    
+handle_call(dump_state, _From, State) ->
+    {reply, State, State};    
 handle_call({get, Property}, _From, State) ->
     Res = do_get(Property, State),
     {reply, Res, State};
