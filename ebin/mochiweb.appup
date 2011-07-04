@@ -1,0 +1,9 @@
+{"1.5.0-stud",
+    [{"1.5.0", [
+        {restart_application, mochiweb}
+    ]}],
+    [{"1.5.0", [
+        {restart_application, mochiweb}
+    ]}]
+}.
+
