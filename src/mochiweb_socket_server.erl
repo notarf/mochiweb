@@ -30,7 +30,8 @@
          ssl=false,
          ssl_opts=[{ssl_imp, new}],
          acceptor_pool=sets:new(),
-         profile_fun=undefined}).
+         profile_fun=undefined,
+         stud_hack=false}).
 
 -define(is_old_state(State), not is_record(State, mochiweb_socket_server)).
 
@@ -100,6 +101,8 @@ parse_options([{ip, Ip} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{ip=ParsedIp});
 parse_options([{loop, Loop} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{loop=Loop});
+parse_options([{stud_hack, Bool} | Rest], State) when is_boolean(Bool) ->
+    parse_options(Rest, State#mochiweb_socket_server{stud_hack=Bool});
 parse_options([{backlog, Backlog} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{backlog=Backlog});
 parse_options([{nodelay, NoDelay} | Rest], State) ->

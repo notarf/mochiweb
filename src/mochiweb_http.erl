@@ -22,7 +22,9 @@
 
 -record(body, {http_loop,                   %% normal http handler fun
                websocket_loop,              %% websocket handler fun
-               websocket_origin_validator   %% fun(Origin) -> true/false
+               websocket_origin_validator,  %% fun(Origin) -> true/false
+               stud_hack = false,
+               client_ip = undefined        %% IP addr of client (stud hack)
               }). 
 
 parse_options(Options) ->
@@ -38,7 +40,8 @@ parse_options(Options) ->
     end,
     Body = #body{http_loop                  = HttpLoop,
                  websocket_loop             = WsLoop,
-                 websocket_origin_validator = WsOrigin},
+                 websocket_origin_validator = WsOrigin,
+                 stud_hack                  = proplists:get_value(stud_hack, Options, false)},
     Loop = fun (S) -> ?MODULE:loop(S, Body) end,
     Options1 = [{loop, Loop} | 
                     proplists:delete(loop, 
@@ -115,6 +118,21 @@ default_body(Req, _Method, _Path) ->
 default_body(Req) ->
     default_body(Req, Req:get(method), Req:get(path)).
 
+loop(Socket, Body = #body{stud_hack = true, client_ip = undefined}) ->
+    %%      --write-ip      (write 1 octet with the IP family followed by
+    %%                      4 (IPv4) or 16 (IPv6) octets little-endian
+    %%                      to backend before the actual data)
+    case mochiweb_socket:recv(Socket, 1, 5000) of 
+        {ok, <<2>>}  -> %% IPv4 (AF_INET)
+            {ok, <<A:8,B:8,C:8,D:8>>} = mochiweb_socket:recv(Socket, 4, 1000),
+            Ip = inet_parse:ntoa({A,B,C,D});
+        %% TODO handle v6
+        {ok, <<23>>} -> %% IPv6 (AF_INET6)
+            Ip = "0.0.0.0",
+            exit(ipv6_not_handled)
+    end,
+    mochiweb_socket:setopts(Socket, [{packet, http}]),
+    request(Socket, Body#body{client_ip=Ip});
 loop(Socket, Body) ->
     mochiweb_socket:setopts(Socket, [{packet, http}]),
     request(Socket, Body).
@@ -148,10 +166,14 @@ headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
     mochiweb_socket:setopts(Socket, [{packet, raw}]),
     handle_invalid_request(Socket, Request, Headers);
-headers(Socket, Request, Headers, Body, HeaderCount) ->
+headers(Socket, Request, Headers0, Body, HeaderCount) ->
     mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
         {Protocol, _, http_eoh} when Protocol == http orelse Protocol == ssl ->
+            case Body#body.client_ip of
+                undefined -> Headers = Headers0;
+                Cip       -> Headers = [ {'X-Stud-Client-Ip', Cip} | Headers0 ]
+            end,
             MHeaders = mochiweb_headers:make(Headers),
             case is_websocket_upgrade_requested(MHeaders) of
                 true ->
@@ -171,13 +193,13 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
                     end
             end;
         {Protocol, _, {http_header, _, Name, _, Value}} when Protocol == http orelse Protocol == ssl ->
-            headers(Socket, Request, [{Name, Value} | Headers], Body,
+            headers(Socket, Request, [{Name, Value} | Headers0], Body,
                     1 + HeaderCount);
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
         _Other ->
-            handle_invalid_request(Socket, Request, Headers)
+            handle_invalid_request(Socket, Request, Headers0)
     after ?HEADERS_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)

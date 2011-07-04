@@ -1,5 +1,8 @@
 ** FORK NOTES **
 
+studhack: added shameless hack to snag client IP from "stud" and add a header
+          see: https://github.com/bumptech/stud
+
 Added websockets support, see the websockets_demo in examples/
 
 ****************
