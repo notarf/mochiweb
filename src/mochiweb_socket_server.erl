@@ -242,7 +242,19 @@ upgrade_state({mochiweb_socket_server, Port, Loop, Name,
                             acceptor_pool_size=AcceptorPoolSize,
                             ssl=SSL,
                             ssl_opts=SSL_opts,
-                            acceptor_pool=AcceptorPool}.
+                            acceptor_pool=AcceptorPool};
+upgrade_state({mochiweb_socket_server, Port, Loop, Name,
+             Max, IP, Listen, NoDelay, Backlog, ActiveSockets,
+             AcceptorPoolSize, SSL, SSL_opts,
+             AcceptorPool,ProfileFun}) ->
+    #mochiweb_socket_server{port=Port, loop=Loop, name=Name, max=Max, ip=IP,
+                            listen=Listen, nodelay=NoDelay, backlog=Backlog,
+                            active_sockets=ActiveSockets,
+                            acceptor_pool_size=AcceptorPoolSize,
+                            ssl=SSL,
+                            ssl_opts=SSL_opts,
+                            acceptor_pool=AcceptorPool,
+                            profile_fun=ProfileFun}.
 
 handle_call(Req, From, State) when ?is_old_state(State) ->
     handle_call(Req, From, upgrade_state(State));
