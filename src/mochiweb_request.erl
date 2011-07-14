@@ -44,7 +44,7 @@
 %% @type ioheaders() = headers() | [{key(), value()}].
 
 % 5 minute default idle timeout
--define(IDLE_TIMEOUT, 300000).
+-define(IDLE_TIMEOUT, infinity).
 
 % Maximum recv_body() length of 1MB
 -define(MAX_RECV_BODY, (1024*1024)).
